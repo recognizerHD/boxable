@@ -1,2 +1,49 @@
-# lemp-installer
+# LEMP Installer
 A LEMP installer that also sets up a number of other packages that I often use.
+
+### Disclaimer
+This is intended to run on a clean install of a VPS running Ubuntu 18. Use at your own risk. I made this for myself
+
+
+                                                                                             
+## About 
+    
+### Before you begin, you will need:
+**Hostname** - a fully qualified domain name. Used for the default site with nginx.\
+**Papertrail hostname and port** *(optional)* - Used for logging.\
+**Username for default server** - this is where phpMyAdmin will sit.\
+**Username** - for your future login. You'll also supply a password when prompted.
+
+----
+
+First, some small packages needed for the installation and other tasks will be installed.
+You will be prompted to create a user and be set up to log in with that account instead of root.
+Next, various small packages used for backups and other background processes will be installed.
+Then you will be asked to install the following packages:
+
+| Package              | Version       |
+| -------------------- | ------------- |
+| nginx-extras         | Latest        |
+| MariaDB              | 10.1 (Latest) |
+| PHP-FPM              | 7.3           |
+| Webmin               | Latest        |
+| Letsencrypt/Certbot  | Latest        |
+
+### Install Order
+
+1. You'll be prompted to change the hostname.
+2. Various packages will be installed like putty tools, rsyslog, curl, etc.
+3. Papertrail is then set up for logging purposes.
+4. A user is then created for you so you can use this instead of root for all future connections. It will also disable root login via password.
+5. Letsencrypt/Certbot will be installed. 
+6. MariaDB is then installed. As of this script, 10.1 is installed and login via root is done with sockets instead of password. No root password is necessary at this point.
+7. PHP-FPM 7.3 is installed with a number of the packages that I typically install. These include:
+   * bz2 cli curl fpm gd imap json mysql sqlite3 tidy mbstring xml zip
+   * composer is also installed
+8. Nginx is then installed and many snippets are set up for possible future use. If papertrail was set up, it also adds a custom logging format to show differently in papertrail.
+9. Webmin is then installed. The mysql config file is updated to point to MariaDB and a two custom commands are added that I use. The nginx module for webmin is also installed.
+10. The hosting user is then created.
+   * This user is not intended to be used for managing the server. It is intended to be the default website user. phpMyAdmin is set up under this user.
+   * Letsencrypt is then run to get a certificate for this default site so it is now running under SSL.
+   * The webmin install is then updated to use the same certificate. 
+11. Fail2Ban is installed and asks if you want to change the SSHD port.
