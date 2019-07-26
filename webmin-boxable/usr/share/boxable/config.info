@@ -1,0 +1,15 @@
+line1=Boxable,11
+boxable_site_dir=Path to Boxable Sites,3,System default(/etc/boxable/sites)
+boxable_nginx_default=Path to default nginx config for new sites,3,System Default (/etc/boxable/setup/nginx-site.conf)
+
+line2=Nginx,11
+nginx_dir=Path to Nginx Configuration Folder,3,System default (/etc/nginx)
+
+line3=php-fpm,11
+
+
+line3=MySQL,11
+
+
+line4=LetsEncrypt,11
+

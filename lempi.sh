@@ -552,7 +552,6 @@ server {
     include /etc/nginx/snippets/x-ua-compatible.conf;
     include /etc/nginx/snippets/expires.conf;
     # include /etc/nginx/snippets/protect-system-files.conf;
-    # include /etc/nginx/snippets/ssl-modern.conf;
     include /etc/nginx/snippets/ssl-stapling.conf;
 
     location ~ \.php$ {
@@ -682,24 +681,24 @@ install-database() {
         if [[ $interactive == $NO ]] || [[ $RETURNVAR == $YES ]]; then
             echo -e $cl_info "Installing MariaDB" $clear
             if [[ $simulated == 1 ]]; then
-#                echo -e "\e[0m$console apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8\e[0m"
-#                echo -e "\e[0m$console cat > /etc/apt/sources.list.d/mariadb.list << EOF ... EOF\e[0m"
-#                echo -e "\e[0m$console apt update\e[0m"
+                echo -e "\e[0m$console apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8\e[0m"
+                echo -e "\e[0m$console cat > /etc/apt/sources.list.d/mariadb.list << EOF ... EOF\e[0m"
+                echo -e "\e[0m$console apt update\e[0m"
                 echo -e $cl_cons"$console apt install -y mariadb-server" $clear
 
             else
+                apt install software-properties-common
+                apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
 
-            # 10.3 is not available for 18.04. I'd have to use 16.04 or 10.1
-#                apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-#                if ! grep -q download.webmin.com/download/repository /etc/apt/sources.list.d/webmin.list; then
-#                    cat > /etc/apt/sources.list.d/mariadb.list << EOF
-## MariaDB 10.3 repository list - created 2018-08-16 23:46 UTC
-## http://downloads.mariadb.org/mariadb/repositories/
-#deb [arch=amd64,arm64,ppc64el] http://mirror.its.dal.ca/mariadb/repo/10.3/ubuntu bionic main
-#deb-src http://mirror.its.dal.ca/mariadb/repo/10.3/ubuntu bionic main
-#EOF
-#                fi
-#                apt update
+                if ! grep -q download.webmin.com/download/repository /etc/apt/sources.list.d/webmin.list; then
+                    cat > /etc/apt/sources.list.d/mariadb.list << EOF
+# MariaDB 10.4 repository list - created 2018-08-16 23:46 UTC
+# http://downloads.mariadb.org/mariadb/repositories/
+deb [arch=ppc64el,arm64,amd64] http://mariadb.mirror.iweb.com/repo/10.4/ubuntu bionic main
+# deb-src [arch=ppc64el,arm64,amd64] http://mariadb.mirror.iweb.com/repo/10.4/ubuntu bionic main
+EOF
+                fi
+                apt update
                 apt install -y mariadb-server
 
             fi
@@ -770,316 +769,26 @@ install-nginx() {
             else
                 apt install -y -q nginx-extras
 
-                cat > /etc/nginx/snippets/location-standard.conf << EOF
-location / {
-    try_files \$uri \$uri/ /index.php\$is_args\$args;
-}
-EOF
-                cat > /etc/nginx/snippets/location-wikimedia.conf << EOF
-location / {
-    try_files \$uri \$uri/ @rewrite;
-}
-location @rewrite {
-    rewrite ^/(.*)$ /index.php?title=\$1&\$args;
-}
-EOF
-                cat > /etc/nginx/snippets/autoloads.conf << EOF
-location = /favicon.ico {
-    log_not_found off;
-    access_log off;
-}
-
-location = /robots.txt {
-    allow all;
-    log_not_found off;
-    access_log off;
-}
-EOF
-                cat > /etc/nginx/snippets/cache-file-descriptors.conf << EOF
-# This tells Nginx to cache open file handles, "not found" errors, metadata about files and their permissions, etc.
-#
-# The upside of this is that Nginx can immediately begin sending data when a popular file is requested,
-# and will also know to immediately send a 404 if a file is missing on disk, and so on.
-#
-# However, it also means that the server won't react immediately to changes on disk, which may be undesirable.
-#
-# In the below configuration, inactive files are released from the cache after 20 seconds, whereas
-# active (recently requested) files are re-validated every 30 seconds.
-#
-# Descriptors will not be cached unless they are used at least 2 times within 20 seconds (the inactive time).
-#
-# A maximum of the 1000 most recently used file descriptors can be cached at any time.
-#
-# Production servers with stable file collections will definitely want to enable the cache.
-open_file_cache          max=1000 inactive=20s;
-open_file_cache_valid    30s;
-open_file_cache_min_uses 2;
-open_file_cache_errors on;
-EOF
-                cat > /etc/nginx/snippets/cross-domain-insecure.conf << EOF
-# Cross domain AJAX requests
-
-# http://www.w3.org/TR/cors/#access-control-allow-origin-response-header
-
-# **Security Warning**
-# Do not use this without understanding the consequences.
-# This will permit access from any other website.
-#
-add_header "Access-Control-Allow-Origin" "*";
-
-# Instead of using this file, consider using a specific rule such as:
-#
-# Allow access based on [sub]domain:
-# add_header "Access-Control-Allow-Origin" "subdomain.example.com";
-EOF
-                cat > /etc/nginx/snippets/expires.conf << EOF
-# Expire rules for static content
-
-# No default expire rule. This config mirrors that of apache as outlined in the
-# html5-boilerplate .htaccess file. However, nginx applies rules by location,
-# the apache rules are defined by type. A consequence of this difference is that
-# if you use no file extension in the url and serve html, with apache you get an
-# expire time of 0s, with nginx you'd get an expire header of one month in the
-# future (if the default expire rule is 1 month). Therefore, do not use a
-# default expire rule with nginx unless your site is completely static
-
-# cache.appcache, your document html and data
-location ~* \.(?:manifest|appcache|html?|xml|json)$ {
-  add_header Cache-Control "max-age=0";
-}
-
-# Feed
-location ~* \.(?:rss|atom)$ {
-  add_header Cache-Control "max-age=3600";
-}
-
-# Media: images, icons, video, audio, HTC
-location ~* \.(?:jpg|jpeg|gif|png|ico|cur|gz|svg|mp4|ogg|ogv|webm|htc)$ {
-  access_log off;
-  add_header Cache-Control "max-age=2592000";
-}
-
-# Media: svgz files are already compressed.
-location ~* \.svgz$ {
-  access_log off;
-  gzip off;
-  add_header Cache-Control "max-age=2592000";
-}
-
-# CSS and Javascript
-location ~* \.(?:css|js)$ {
-  add_header Cache-Control "max-age=31536000";
-  access_log off;
-}
-
-# WebFonts
-# If you are NOT using cross-domain-fonts.conf, uncomment the following directive
-# location ~* \.(?:ttf|ttc|otf|eot|woff|woff2)$ {
-#  add_header Cache-Control "max-age=2592000";
-#  access_log off;
-# }
-EOF
-                cat > /etc/nginx/snippets/extra-security.conf << EOF
-# The X-Frame-Options header indicates whether a browser should be allowed
-# to render a page within a frame or iframe.
-add_header X-Frame-Options SAMEORIGIN always;
-
-# MIME type sniffing security protection
-#	There are very few edge cases where you wouldn't want this enabled.
-add_header X-Content-Type-Options nosniff always;
-
-# The X-XSS-Protection header is used by Internet Explorer version 8+
-# The header instructs IE to enable its inbuilt anti-cross-site scripting filter.
-add_header X-XSS-Protection "1; mode=block" always;
-
-# with Content Security Policy (CSP) enabled (and a browser that supports it (http://caniuse.com/#feat=contentsecuritypolicy),
-# you can tell the browser that it can only download content from the domains you explicitly allow
-# CSP can be quite difficult to configure, and cause real issues if you get it wrong
-# There is website that helps you generate a policy here http://cspisawesome.com/
-# add_header Content-Security-Policy "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' https://www.google-analytics.com;" always;
-
-EOF
-                cat > /etc/nginx/snippets/fastcgi-params.conf << EOF
-fastcgi_param  QUERY_STRING       \$query_string;
-fastcgi_param  REQUEST_METHOD     \$request_method;
-fastcgi_param  CONTENT_TYPE       \$content_type;
-fastcgi_param  CONTENT_LENGTH     \$content_length;
-
-fastcgi_param  SCRIPT_NAME        \$fastcgi_script_name;
-fastcgi_param  REQUEST_URI        \$request_uri;
-fastcgi_param  DOCUMENT_URI       \$document_uri;
-fastcgi_param  DOCUMENT_ROOT      \$document_root;
-fastcgi_param  SERVER_PROTOCOL    \$server_protocol;
-fastcgi_param  REQUEST_SCHEME     \$scheme;
-fastcgi_param  HTTPS              \$https if_not_empty;
-
-fastcgi_param  GATEWAY_INTERFACE  CGI/1.1;
-fastcgi_param  SERVER_SOFTWARE    nginx/\$nginx_version;
-
-fastcgi_param  REMOTE_ADDR        \$remote_addr;
-fastcgi_param  REMOTE_PORT        \$remote_port;
-fastcgi_param  SERVER_ADDR        \$server_addr;
-fastcgi_param  SERVER_PORT        \$server_port;
-fastcgi_param  SERVER_NAME        \$server_name;
-
-# PHP only, required if PHP was built with --enable-force-cgi-redirect
-fastcgi_param  REDIRECT_STATUS    200;
-EOF
-                cat > /etc/nginx/snippets/no-transform.conf << EOF
-# Prevent mobile network providers from modifying your site
-#
-# (!) If you are using `ngx_pagespeed`, please note that setting
-# the `Cache-Control: no-transform` response header will prevent
-# `PageSpeed` from rewriting `HTML` files, and, if
-# `pagespeed DisableRewriteOnNoTransform off` is not used, also
-# from rewriting other resources.
-#
-# https://developers.google.com/speed/pagespeed/module/configuration#notransform
-
-add_header "Cache-Control" "no-transform";
-EOF
-                cat > /etc/nginx/snippets/protect-system-files.conf << EOF
-# Prevent clients from accessing hidden files (starting with a dot)
-# This is particularly important if you store .htpasswd files in the site hierarchy
-# Access to `/.well-known/` is allowed.
-# https://www.mnot.net/blog/2010/04/07/well-known
-# https://tools.ietf.org/html/rfc5785
-location ~* /\.(?!well-known\/) {
-  deny all;
-}
-
-# Prevent clients from accessing to backup/config/source files
-location ~* (?:\.(?:bak|conf|dist|fla|in[ci]|log|psd|sh|sql|sw[op])|~)$ {
-  deny all;
-}
-EOF
-                cat > /etc/nginx/snippets/ssl-intermediate.conf << EOF
-# Protect against the BEAST and POODLE attacks by not using SSLv3 at all. If you need to support older browsers (IE6) you may need to add
-# SSLv3 to the list of protocols below.
-ssl_protocols              TLSv1 TLSv1.1 TLSv1.2;
-
-# Ciphers set to best allow protection from Beast, while providing forwarding secrecy, as defined by Mozilla (Intermediate Set) - https://wiki.mozilla.org/Security/Server_Side_TLS#Nginx
-ssl_ciphers                ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA:ECDHE-ECDSA-DES-CBC3-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA:!DSS;
-ssl_prefer_server_ciphers  on;
-
-# Optimize SSL by caching session parameters for 10 minutes. This cuts down on the number of expensive SSL handshakes.
-# The handshake is the most CPU-intensive operation, and by default it is re-negotiated on every new/parallel connection.
-# By enabling a cache (of type "shared between all Nginx workers"), we tell the client to re-use the already negotiated state.
-# Further optimization can be achieved by raising keepalive_timeout, but that shouldn't be done unless you serve primarily HTTPS.
-ssl_session_cache    shared:SSL:10m; # a 1mb cache can hold about 4000 sessions, so we can hold 40000 sessions
-ssl_session_timeout  24h;
-
-# SSL buffer size was added in 1.5.9
-#ssl_buffer_size      1400; # 1400 bytes to fit in one MTU
-
-# Session tickets appeared in version 1.5.9
-#
-# nginx does not auto-rotate session ticket keys: only a HUP / restart will do so and
-# when a restart is performed the previous key is lost, which resets all previous
-# sessions. The fix for this is to setup a manual rotation mechanism:
-# http://trac.nginx.org/nginx/changeset/1356a3b9692441e163b4e78be4e9f5a46c7479e9/nginx
-#
-# Note that you'll have to define and rotate the keys securely by yourself. In absence
-# of such infrastructure, consider turning off session tickets:
-#ssl_session_tickets off;
-
-# Use a higher keepalive timeout to reduce the need for repeated handshakes
-keepalive_timeout 300s; # up from 75 secs default
-
-# HSTS (HTTP Strict Transport Security)
-# This header tells browsers to cache the certificate for a year and to connect exclusively via HTTPS.
-#add_header Strict-Transport-Security "max-age=31536000" always;
-# This version tells browsers to treat all subdomains the same as this site and to load exclusively over HTTPS
-#add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-# This version tells browsers to treat all subdomains the same as this site and to load exclusively over HTTPS
-# Recommend is also to use preload service
-#add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-
-# This default SSL certificate will be served whenever the client lacks support for SNI (Server Name Indication).
-# Make it a symlink to the most important certificate you have, so that users of IE 8 and below on WinXP can see your main site without SSL errors.
-#ssl_certificate      /etc/nginx/default_ssl.crt;
-#ssl_certificate_key  /etc/nginx/default_ssl.key;
-
-# Consider using OCSP Stapling as shown in ssl-stapling.conf
-EOF
-                cat > /etc/nginx/snippets/ssl-modern.conf << EOF
-# modern configuration. tweak to your needs.
-# Protect against the BEAST and POODLE attacks by not using SSLv3 at all. If you need to support older browsers (IE6) you may need to add
-ssl_protocols TLSv1.2;
-
-# Ciphers set to best allow protection from Beast, while providing forwarding secrecy, as defined by Mozilla (Intermediate Set) - https://wiki.mozilla.org/Security/Server_Side_TLS#Nginx
-ssl_ciphers 'ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256';
-ssl_prefer_server_ciphers on;
-
-# Optimize SSL by caching session parameters for 10 minutes. This cuts down on the number of expensive SSL handshakes.
-# The handshake is the most CPU-intensive operation, and by default it is re-negotiated on every new/parallel connection.
-# By enabling a cache (of type "shared between all Nginx workers"), we tell the client to re-use the already negotiated state.
-# Further optimization can be achieved by raising keepalive_timeout, but that shouldn't be done unless you serve primarily HTTPS.
-ssl_session_cache shared:SSL:50m;
-ssl_session_timeout 1d;
-
-# SSL buffer size was added in 1.5.9
-#ssl_buffer_size      1400; # 1400 bytes to fit in one MTU
-
-# Session tickets appeared in version 1.5.9
-#
-# nginx does not auto-rotate session ticket keys: only a HUP / restart will do so and
-# when a restart is performed the previous key is lost, which resets all previous
-# sessions. The fix for this is to setup a manual rotation mechanism:
-# http://trac.nginx.org/nginx/changeset/1356a3b9692441e163b4e78be4e9f5a46c7479e9/nginx
-#
-# Note that you'll have to define and rotate the keys securely by yourself. In absence
-# of such infrastructure, consider turning off session tickets:
-ssl_session_tickets off;
-
-# Use a higher keepalive timeout to reduce the need for repeated handshakes
-keepalive_timeout 300s; # up from 75 secs default
-
-# HSTS (HTTP Strict Transport Security)
-# This header tells browsers to cache the certificate for a year and to connect exclusively via HTTPS.
-#add_header Strict-Transport-Security "max-age=31536000" always;
-# This version tells browsers to treat all subdomains the same as this site and to load exclusively over HTTPS
-#add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-# This version tells browsers to treat all subdomains the same as this site and to load exclusively over HTTPS
-# Recommend is also to use preload service
-#add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-add_header Strict-Transport-Security max-age=15768000;
-
-# This default SSL certificate will be served whenever the client lacks support for SNI (Server Name Indication).
-# Make it a symlink to the most important certificate you have, so that users of IE 8 and below on WinXP can see your main site without SSL errors.
-#ssl_certificate      /etc/nginx/default_ssl.crt;
-#ssl_certificate_key  /etc/nginx/default_ssl.key;
-
-# Consider using OCSP Stapling as shown in ssl-stapling.conf
-EOF
-                cat > /etc/nginx/snippets/ssl-stapling.conf << EOF
-# OCSP stapling...
-ssl_stapling on;
-ssl_stapling_verify on;
-
-#trusted cert must be made up of your intermediate certificate followed by root certificate
-#ssl_trusted_certificate /path/to/ca.crt;
-
-resolver 8.8.8.8 8.8.4.4 216.146.35.35 216.146.36.36 valid=60s;
-resolver_timeout 2s;
-EOF
-                cat > /etc/nginx/snippets/x-ua-compatible.conf << EOF
-# Force the latest IE version
-add_header "X-UA-Compatible" "IE=Edge";
-EOF
-                cat > /etc/nginx/conf.d/gzip.conf << EOF
-gzip_disable "msie6";
-gzip_vary on;
-gzip_proxied any;
-gzip_comp_level 6;
-gzip_buffers 16 8k;
-# gzip_http_version 1.1;
-gzip_types text/plain text/css text/js application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript;
-EOF
+                wget -qO /etc/nginx/snippets/location-standard.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/location-standard.conf;
+                wget -qO /etc/nginx/snippets/location-wikimedia.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/location-wikimedia.conf;
+                wget -qO /etc/nginx/snippets/autoloads.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/autoloads.conf;
+                wget -qO /etc/nginx/snippets/cache-file-descriptors.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/cache-file-descriptors.conf;
+                wget -qO /etc/nginx/snippets/cross-domain-insecure.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/cross-domain-insecure.conf;
+                wget -qO /etc/nginx/snippets/expires.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/expires.conf;
+                wget -qO /etc/nginx/snippets/extra-security.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/extra-security.conf;
+                wget -qO /etc/nginx/snippets/fastcgi-params.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/fastcgi-params.conf;
+                wget -qO /etc/nginx/snippets/no-transform.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/no-transform.conf;
+                wget -qO /etc/nginx/snippets/protect-system-files.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/protect-system-files.conf;
+                wget -qO /etc/nginx/snippets/ssl-intermediate.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/ssl-intermediate.conf;
+                wget -qO /etc/nginx/snippets/ssl-modern.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/ssl-modern.conf;
+                wget -qO /etc/nginx/snippets/ssl-stapling.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/ssl-stapling.conf;
+                wget -qO /etc/nginx/snippets/x-ua-compatible.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/x-ua-compatible.conf;
+                wget -qO /etc/nginx/conf.d/gzip.conf https://raw.githubusercontent.com/recognizerHD/lemp-installer/$GITHUB_BRANCH/nginx-snippets/gzip.conf;
 
                 if [[ $PAPERTRAIL_INSTALLED == $INSTALLED ]]; then
+                # TODO nginx.conf needs the access_log line commented out if this goes in.
                     cat > /etc/nginx/conf.d/papertrail.conf << EOF
-log_format main '[31m\$remote_addr[0m - \$remote_user [\$time_local] [35m\$status[0m [44m \$host [0m [34m"\$request"[0m \$body_bytes_sent "\$http_referer" "\$http_user_agent" "\$http_x_forwarded_for"'
+log_format main '[31m\$remote_addr[0m - \$remote_user [\$time_local] [35m\$status[0m [44m \$host [0m [34m"\$request"[0m \$body_bytes_sent "\$http_referer" "\$http_user_agent" "\$http_x_forwarded_for"';
 access_log /var/log/nginx/access.log main;
 EOF
 
@@ -1203,13 +912,14 @@ setup-cleanup() {
 
 install-backupscripts() {
     echo "Installing Backup Scripts";
+    mkdir /root/bin
+
     # Backup /etc/letsencrypt
     sleep 1;
 }
 
 
-
-//
+GITHUB_BRANCH=master
 SERVER_HOSTNAME=""
 
 RETURNVAR=0
@@ -1297,13 +1007,3 @@ setup-cleanup
 
 echo -e $greenbold "Installation complete.\n" $clear
 cd $returndirectory
-
-
-
-
-
-
-#
-#Do a full test with everything.
-#Get nginx snippets installed
-#Do a site tes

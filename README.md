@@ -16,7 +16,7 @@ Then you will be asked to install the following packages:
 | Package              | Version       |
 | -------------------- | ------------- |
 | nginx-extras         | Latest        |
-| MariaDB              | 10.1 (Latest) |
+| MariaDB              | 10.4 (Latest) |
 | PHP-FPM              | 7.3           |
 | Webmin               | Latest        |
 | Letsencrypt/Certbot  | Latest        |
