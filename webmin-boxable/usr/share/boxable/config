@@ -1,0 +1,3 @@
+nginx_dir=/etc/nginx
+boxable_site_dir=/etc/boxable/sites
+boxable_nginx_default=/etc/boxable/setup/nginx-site.conf

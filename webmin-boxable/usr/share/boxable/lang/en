@@ -1,0 +1,16 @@
+index_title=Boxable Sites
+index_version=Boxable Version $1
+
+new_site_title=Boxable Sites - New Site
+
+setup_title=Boxable Sites - Setup
+
+tab_create=Create Boxable Site
+tab_existing=Existing Boxable Sites
+tab_setup=Setup Boxable
+tab_todo=Todo List
+
+index_setup_name=Service Name
+index_setup_status=Status
+index_setup_version=Version
+index_setup_running=Running

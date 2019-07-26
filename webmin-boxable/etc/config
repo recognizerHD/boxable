@@ -1,0 +1,4 @@
+boxable_site_dir=/etc/boxable/sites
+boxable_nginx_default_dir=test
+nginx_dir=
+boxable_nginx_default=/etc/boxable/setup/nginx-site.conf
