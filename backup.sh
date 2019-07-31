@@ -1,12 +1,12 @@
 #!/bin/bash
 
+# https://docs.google.com/document/d/1m26y9BwS1KgvFZ56V61DoOASW6iJOkFLh7gV_qt0xvM/edit
 # Read a folder
 # get *.conf
 
 shopt -s extglob
 configfolder="/home/recognizer/lempi/boxables/"
 #configfile="/home/recognizer/lempi/boxables/paulwarren.ca.conf" # set the actual path name of your (DOS or Unix) config file
-
 
 DATABASE=()
 FILES=()
@@ -41,16 +41,88 @@ clear-line() {
 }
 
 initialize-backup-space() {
-  # TODO Shuffle backup folders.
-  # Delete 3
-  # 2 -> 3, 1 -> 2, 0 -> 1, mkdir working;
-  echo "INTIALIZING";
+  DIR_ROOTNS="root/backup"
+  DIR_ROOT="/$DIR_ROOTNS"
+  TEXT_TEMPOUT="$DIR_ROOT/temp/dropbox-output.txt"
+  TEXT_MESSAGE="$DIR_ROOT/temp/message.txt"
+  TEXT_FULLTRANS="$DIR_ROOT/temp/full-trans.txt"
+  TEXT_FULLTRANS_GZ="$DIR_ROOT/temp/full-trans.txt.gz"
+  TEXT_SUMMARY="$DIR_ROOT/temp/summary.txt"
+  TEXT_ERRORS="$DIR_ROOT/temp/errors.txt"
+  TEXT_UPERRORS="$DIR_ROOT/temp/upload-errors.txt"
+
+  cd $DIR_ROOT
+  # 1. Delete backup/archive/3. Move 2->3, 1->2, working->1.
+  mkdir $DIR_ROOT 2>/dev/null
+  mkdir $DIR_ROOT/archive 2>/dev/null
+  rm -r $DIR_ROOT/archive/3 2>/dev/null
+  mv $DIR_ROOT/archive/2 $DIR_ROOT/archive/3 2>/dev/null
+  mv $DIR_ROOT/archive/1 $DIR_ROOT/archive/2 2>/dev/null
+  mv $DIR_ROOT/archive/0 $DIR_ROOT/archive/1 2>/dev/null
+  mkdir $DIR_ROOT/archive/0 2>/dev/null
+  mkdir $DIR_ROOT/mysql 2>/dev/null
+  mkdir $DIR_ROOT/temp 2>/dev/null
+
+  touch $TEXT_MESSAGE
+  touch $TEXT_FULLTRANS
+  touch $TEXT_SUMMARY
+  touch $TEXT_ERRORS
+  touch $TEXT_UPERRORS
+
+  cat /dev/null >$TEXT_MESSAGE
+  cat /dev/null >$TEXT_SUMMARY
+  cat /dev/null >$TEXT_FULLTRANS
+  cat /dev/null >$TEXT_ERRORS
+  cat /dev/null >$TEXT_UPERRORS
 }
 
+prepare-archive() {
+  site=$1
+  workingfolder=$DIR_ROOT/archive/0
+  if [ $BACKUPTYPE == "full" ]; then
+    DATE=$(date +%Y.%m)
+    ARCHIVE="$workingfolder/$site-$DATE.tar"
+    #    log "qwerqwer" "another"
+  else
+    DATE=$(date +%Y.%m.%d)
+    ARCHIVE="$workingfolder/$site-$DATE-inc.tar"
+    #    log "test" "another"
+  fi
+
+  # create the archive.
+  tar cvf $ARCHIVE -C / --files-from /dev/null
+}
+
+backup-files() {
+  for file in ${FILES[*]}; do
+    DIR=$HOME$file
+    if [ $BACKUPTYPE == "full" ]; then
+      tar rvf $ARCHIVE -C / $DIR 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
+    else
+      find $DIR -mtime $MONTH_DATE -type f -print | tar rvf $ARCHIVE -T - 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
+    fi
+  done
+
+  for database in ${DATABASES[*]}; do
+    $MYSQL_DUMP --force --opt --skip-lock-tables --databases $database >$DIR_ROOT/mysql/$database.sql 2>>$TEXT_ERRORS
+  done
+  if [ ${#DATABASES[*]} -ne '0' ]; then
+    tar rvf $ARCHIVE -C / $DIR_ROOT/mysql/ 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
+  fi
+
+  # TODO Deal with
+}
+
+log() {
+  echo -e "${@}"
+  #  echo "OR"
+  #  printf '%s\n' "${SITES[@]}"
+}
 
 loop-sites() {
+  # https://docs.google.com/document/d/1Qyvaf0ayaCPk-SpxuR71h_SmSx6lhUOlqDITByvDgwE/edit#heading=h.o6trhi8pb4l
   for site in ${SITES[*]}; do
-    DATABASE=()
+    DATABASES=()
     FILES=()
     NGINX=
     HOME=
@@ -71,29 +143,33 @@ loop-sites() {
         elif [[ $lhs == "nginx" ]]; then
           NGINX+=("$rhs")
         elif [[ $lhs == "database" ]]; then
-          DATABASE+=("$rhs")
+          DATABASES+=("$rhs")
         fi
       fi
-    done <$configfile.unix_file;
+    done <$configfile.unix_file
 
-    # TODO mkdir folder within cur
+    site=$(echo $configfile | sed -e 's/.*\(\\\|\/\)\(.*\)\.conf$/\2/g')
+    prepare-archive $site
+    backup-files
 
     echo "FOR SITE: $configfile"
-    echo "DATABASES:"
-    # TODO FOR EACH database, run SQL to export it
-    # copy to $backup/$database.sql
-    printf '%s\n' "${DATABASE[@]}"
-    echo "FILES:"
-    # TODO FOR EACH file/folder, copy to backup folder
-    # copy to $backup/home
-    printf '%s\n' "${FILES[@]}"
+    #    echo "DATABASES:"
+    #    # TODO FOR EACH database, run SQL to export it
+    #    # copy to $backup/$database.sql
+    #    printf '%s\n' "${DATABASE[@]}"
+    #    echo "FILES:"
+    #    # TODO FOR EACH file/folder, copy to backup folder
+    #    # copy to $backup/home
+    #    printf '%s\n' "${FILES[@]}"
     echo "NGINX:"
     # TODO For the nginx file, copy the file, then parse it for letsencrypt
     # copy to $backup/nginx.cfg
     # if SSL, copy cert and letsencrypt config
+    # https://druss.co/2019/03/migrate-letsencrypt-certificates-certbot-to-new-server/
     printf '%s\n' "${NGINX[@]}"
     unlink $configfile.unix_file
 
+    # TODO write log to papertrail
     # TODO zip up site and plce in 0
     # TODO remove working backup folder
   done
@@ -141,10 +217,13 @@ ABORT="abort"
 RETURNVAR=
 BACKUPTYPE="inc"
 SITES=()
-DATABASE=()
+DATABASES=()
 FILES=()
 NGINX=
 HOME=
+ARCHIVE=
+MONTH_DATE=-$(date +%d)
+MYSQL_DUMP="/usr/bin/mysqldump"
 
 whitebold="\e[1;30m"
 redbold="\e[1;31m"
@@ -176,7 +255,6 @@ parse-commandline "$@"
 initialize-backup-space
 loop-sites
 clear-line
-
 
 # echo $database
 #printf '%s\n' "${SITES[@]}"
