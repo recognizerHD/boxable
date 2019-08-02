@@ -6,31 +6,23 @@
 
 shopt -s extglob
 configfolder="/home/recognizer/lempi/boxables/"
+googleFolder="1Y38Cm4f7d3N4Hf4cKvaxz1mdf2Y3QT-C"
 #configfile="/home/recognizer/lempi/boxables/paulwarren.ca.conf" # set the actual path name of your (DOS or Unix) config file
 
-DATABASE=()
-FILES=()
-NGINX=
-HOME=
+# First, download and install gdrive
+# Then setup the google folder to install to. Can't think of a good automated way to do it.
+# Then setup papertrail settings.
+# Setup the logger.py script.
+# Run this once to initialize the google settings.
 
-#while IFS='= ' read -r lhs rhs; do
-#  if [[ ! $lhs =~ ^\ *# && -n $lhs ]]; then
-#    rhs="${rhs%%\#*}"  # Del in line right comments
-#    rhs="${rhs%%*( )}" # Del trailing spaces
-#    rhs="${rhs%\"*}"   # Del opening string quotes
-#    rhs="${rhs#\"*}"   # Del closing string quotes
-#
-#    if [[ $lhs == "home" ]]; then
-#      HOME=$rhs
-#    elif [[ $lhs == "files" ]]; then
-#      FILES+=("$rhs")
-#    elif [[ $lhs == "nginx" ]]; then
-#      NGINX+=("$rhs")
-#    elif [[ $lhs == "database" ]]; then
-#      DATABASE+=("$rhs")
-#    fi
-#  fi
-#done <$configfile.unix
+# leftovers
+# nginx backup
+# phpfpm backup
+# letsencrypt backup
+# other server specific things
+# parse the nginx to gte the letsencrypt cert and config.
+
+
 
 clear-line() {
   local columns
@@ -97,9 +89,10 @@ backup-files() {
   for file in ${FILES[*]}; do
     DIR=$HOME$file
     if [ $BACKUPTYPE == "full" ]; then
-      tar rvf $ARCHIVE -C / $DIR 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
+      tar rvf $ARCHIVE -C $HOME $file --transform 's,^,files/,' 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
     else
-      find $DIR -mtime $MONTH_DATE -type f -print | tar rvf $ARCHIVE -T - 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
+      cd $HOME
+      find $file -mtime $MONTH_DATE -type f -print | tar rvf $ARCHIVE -T - --transform 's,^,files/,' 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
     fi
   done
 
@@ -107,16 +100,30 @@ backup-files() {
     $MYSQL_DUMP --force --opt --skip-lock-tables --databases $database >$DIR_ROOT/mysql/$database.sql 2>>$TEXT_ERRORS
   done
   if [ ${#DATABASES[*]} -ne '0' ]; then
-    tar rvf $ARCHIVE -C / $DIR_ROOT/mysql/ 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
+    tar rvf $ARCHIVE -C $DIR_ROOT mysql/ 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
   fi
 
-  # TODO Deal with
+  for file in ${FILES[*]}; do
+    DIR=$HOME$file
+    if [ $BACKUPTYPE == "full" ]; then
+      tar rvf $ARCHIVE -C $HOME $file --transform 's,^,files/,' 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
+    else
+      cd $HOME
+      find $file -mtime $MONTH_DATE -type f -print | tar rvf $ARCHIVE -T - --transform 's,^,files/,' 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
+    fi
+  done
+
+  gzip $ARCHIVE
+  ARCHIVE="$ARCHIVE.gz"
+
+  cd /root
+  gdrive upload $ARCHIVE -p $googleFolder
 }
 
 log() {
   echo -e "${@}"
-  #  echo "OR"
-  #  printf '%s\n' "${SITES[@]}"
+  message=$(echo -e "${@}")
+  python /home/recognizer/lempi/logger.py "$message"
 }
 
 loop-sites() {
@@ -168,26 +175,26 @@ loop-sites() {
     # https://druss.co/2019/03/migrate-letsencrypt-certificates-certbot-to-new-server/
     printf '%s\n' "${NGINX[@]}"
     unlink $configfile.unix_file
-
-    # TODO write log to papertrail
-    # TODO zip up site and plce in 0
-    # TODO remove working backup folder
   done
-
-  # TODO upload all files
+  log $cl_high"Backup complete."$clear
 }
 
 parse-commandline() {
+  sitespecific=
   for p in "$@"; do
     if [ $p == "full" ]; then
       BACKUPTYPE="full"
+    elif [ $p == "inc" ]; then
+      BACKUPTYPE="inc"
+    else
+      sitespecific=${1}
     fi
   done
 
   sites=$(find $configfolder -maxdepth 1 -type f)
   for site in $sites; do
     if [[ $site =~ .+\.conf$ ]]; then
-      if [[ ${1} ]]; then
+      if [[ $sitespecific ]]; then
         if [[ $site == "$configfolder${1}.conf" ]]; then
           SITES+=($site)
         fi
@@ -198,18 +205,24 @@ parse-commandline() {
   done
 
   if [[ $SITES ]]; then
-    if [[ ${1} ]]; then
-      echo -e $cl_info"Running backup for just ${1}."$clear
+    if [[ $sitespecific ]]; then
+      log $cl_info"Running backup for just $sitespecific."$clear
     else
-      echo -e $cl_info"Running backup for all"$clear
+      log $cl_info"Running backup for all"$clear
     fi
   else
-    if [[ ${1} ]]; then
-      echo -e $cl_errr"Could not find the site ${1} to backup."$clear
+    if [[ $sitespecific ]]; then
+      log $cl_errr"Could not find the site $sitespecific to backup."$clear
     else
-      echo -e $cl_errr"Could not any sites to backup."$clear
+      log $cl_errr"Could not any sites to backup."$clear
     fi
   fi
+}
+
+cleanup() {
+  rm $DIR_ROOT/temp -r
+  rm $DIR_ROOT/mysql -r
+  log $
 }
 
 # Global Variables
@@ -255,6 +268,7 @@ parse-commandline "$@"
 initialize-backup-space
 loop-sites
 clear-line
+cleanup
 
 # echo $database
 #printf '%s\n' "${SITES[@]}"
