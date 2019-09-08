@@ -1,0 +1,14 @@
+home=/home/ikonquest/
+
+# this will backup all databases
+database=ikonquest_dev
+database=ikonquest
+
+# files are relative to the home
+files=ikonquest.com
+files=dev.ikonquest.com
+files=beta.ikonquest.com
+
+# The name of the config file.
+nginx=paulwarren.ca.conf
+# boxable will attempt to figure out if letsencrypt is being used and copy the certs and the config for it.

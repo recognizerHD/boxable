@@ -1,0 +1,13 @@
+home=/home/foobar/
+user=??
+
+# this will backup all databases
+database=foobar_wp
+database=another_site
+
+# files are relative to the home
+files=paulwarren.ca
+
+# The name of the config file.
+nginx=paulwarren.ca.conf
+# boxable will attempt to figure out if letsencrypt is being used and copy the certs and the config for it.
