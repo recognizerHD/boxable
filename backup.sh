@@ -12,7 +12,7 @@ googleFolder="1Y38Cm4f7d3N4Hf4cKvaxz1mdf2Y3QT-C"
 # First, download and install gdrive
 # Then setup the google folder to install to. Can't think of a good automated way to do it.
 # Then setup papertrail settings.
-# Setup the logger.py script.
+# Setup the boxlog.py script.
 # Run this once to initialize the google settings.
 
 # leftovers
@@ -123,7 +123,7 @@ backup-files() {
 log() {
   echo -e "${@}"
   message=$(echo -e "${@}")
-  python /home/recognizer/lempi/logger.py "$message"
+  python /home/recognizer/lempi/boxlog.py "$message"
 }
 
 loop-sites() {
