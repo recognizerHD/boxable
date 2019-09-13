@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import os
 import platform
-import shutil
+import re
 import sys
 from pathlib import Path
+from subprocess import call, check_output
+from typing import Dict, List, Any, Union, Hashable
 
 import yaml
 
@@ -16,7 +18,7 @@ class BoxBack:
     def __init__(self):
         BoxBack.setup()
         [config_file, config_path] = BoxBack.getfile()
-        config = yaml.safe_load(open(config_file, 'r'))
+        self.config = yaml.safe_load(open(config_file, 'r'))
         self.logger = BoxLog()
 
     @staticmethod
@@ -51,39 +53,73 @@ class BoxBack:
             arch = platform.architecture()[0]
 
             if choice == "google":
-                if shutil.which('gdrive') is None:
-                    # Install google drive
-                    if arch == '64bit' and system == 'windows':
-                        file = "gdrive-windows-x64.exe"
-                    elif arch == '32bit' and system == 'windows':
-                        file = "gdrive-windows-386.exe"
-                    elif arch == '64bit' and system == 'linux':
-                        file = "gdrive-linux-x64"
-                    elif arch == '32bit' and system == 'linux':
-                        file = "gdrive-linux-386"
+                # if shutil.which('gdrive') is None:
+                # Decided to include gdrive.
+                # Install google drive
+                if arch == '64bit' and system == 'windows':
+                    file = "gdrive-windows-x64.exe"
+                elif arch == '32bit' and system == 'windows':
+                    file = "gdrive-windows-386.exe"
+                elif arch == '64bit' and system == 'linux':
+                    file = "gdrive-linux-x64"
+                elif arch == '32bit' and system == 'linux':
+                    file = "gdrive-linux-386"
+                else:
+                    logger.error("Boxable hasn't been developed for other systems at this time.")
+                    sys.stdout.write("No supported systems\n")
+                    exit()
+
+                data = dict(
+                    method="google",
+                    process=file
+                )
+
+                sys.stdout.write("The setup will now setup the authorization for google drive.\n")
+
+                while True:
+                    response = call(["gdrive", "list"], shell=False)
+                    if response == 0:
+                        break
+                    elif response == 1:
+                        choice = Prompts.query_yes_no("An error has occurred. Try again?")
+                        if choice == Prompts.NO:
+                            exit()
                     else:
-                        logger.error("Boxable hasn't been developed for other systems at this time.")
-                        sys.stdout.write("No supported systems\n")
-                        return
+                        print("An error occurred, gdrive returned %d" % response)
 
-                    data = dict(
-                        method="google",
-                        process=file
-                    )
+                while True:
+                    destination_folder = input("Paste the destination folder you wish backup files to reside.\nGoogle Drive: ")
+                    result = re.search(r"^(https://.*/folders/)?([^/]*?)$", destination_folder)
+                    if result is not None:
+                        destination_folder = result.group(2)
 
-                    sys.stdout.write("The setup will now setup the authorization for google drive.\n")
-                    # from subprocess import call
-                    # rc = call(["gdrive", "list"], shell=False)
-                    # if rc == 0:
-                    #     print("someone is using zsh/ksh/tcsh")
-                    # elif rc == 1:
-                    #     print("zsh/ksh/tcsh not used")
-                    # else:
-                    #     print("an error occured, grep returned %d" % rc)
+                    test = call(["gdrive", "info", destination_folder])
+                    if test == 0:
+                        google_folder = check_output(["gdrive", "info", destination_folder])
+                        google_yaml = yaml.safe_load(google_folder)
 
-                    # Then prompt for folder, just paste, it can parse it.
-                    # Save config.
+                        choice = Prompts.query_yes_no_cancel("Set the folder to " + google_yaml["Name"] + " [" + google_yaml['Id'] + "]")
+                        if choice == Prompts.CANCEL:
+                            exit()
+                        elif choice == Prompts.YES:
+                            break
+                    else:
+                        choice = Prompts.query_yes_no("An error has occurred. Try again?")
+                        if choice == Prompts.NO:
+                            exit()
 
+                data['destination'] = destination_folder
+
+                choice = Prompts.query_yes_no("Create folder for each site?")
+                if choice == Prompts.YES:
+                    data['create_site_folders'] = True
+                else:
+                    data['create_site_folders'] = False
+
+                with open(config_file, 'w') as config_out:
+                    yaml.dump(data, config_out)
+                # Then prompt for folder, just paste, it can parse it.
+                # Save config.
 
             elif choice == "firebase":
                 print("NOT YET")
@@ -98,31 +134,27 @@ class BoxBack:
                 sys.stdout.write("Invalid option. Aborting.\n")
                 return
 
-            # input_hostname = ''
-            # input_port = ''
-            # while input_hostname == '':
-            #     user_input = input("Enter the host name: ")
-            #     choice = Prompts.query_yes_no_cancel("Set the host to " + user_input)
-            #     if choice == Prompts.CANCEL:
-            #         exit()
-            #     elif choice == Prompts.YES:
-            #         input_hostname = user_input
-            #
-            # while input_port == '':
-            #     user_input = int(input("Enter the port number: "))
-            #     choice = Prompts.query_yes_no_cancel("Set the port to " + str(user_input))
-            #     if choice == Prompts.CANCEL:
-            #         exit()
-            #     elif choice == Prompts.YES:
-            #         input_port = user_input
-            #
-            # data = dict(
-            #     hostname=input_hostname,
-            #     port=input_port
-            # )
-            # with open(config_file, 'w') as config_out:
-            #     yaml.dump(data, config_out)
-
     def backup(self, site, backup_type):
+        """
+        if site is defined,
+            add site to config list
+        Else
+            read etc/boxables folder and add each file into sites
+
+        loop over sites and
+            get folders / files to add and add them to zip file
+            ( based on backup_type )
+        backup each database in the config
+            add them to zip
+        get path to upload files to
+            
+        """
+        sites = []
+
+        configs = os.listdir('etc/boxables')
         print(site)
         print(backup_type)
+
+    def upload(self, method, file):
+        if method == 'google':
+            print("upload "+file)
