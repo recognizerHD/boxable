@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
+import gzip
 import os
 import platform
 import re
+import shutil
 import sys
+import tarfile
+from datetime import date
 from pathlib import Path
 from subprocess import call, check_output
-from typing import Dict, List, Any, Union, Hashable
 
 import yaml
 
@@ -14,6 +17,8 @@ from scripts import BoxLog, Prompts
 
 class BoxBack:
     logger: BoxLog
+    backup_folder = "archive"
+    sites = []
 
     def __init__(self):
         BoxBack.setup()
@@ -136,25 +141,107 @@ class BoxBack:
 
     def backup(self, site, backup_type):
         """
-        if site is defined,
-            add site to config list
-        Else
-            read etc/boxables folder and add each file into sites
-
         loop over sites and
             get folders / files to add and add them to zip file
             ( based on backup_type )
         backup each database in the config
             add them to zip
         get path to upload files to
-            
+        :return:
         """
-        sites = []
 
-        configs = os.listdir('etc/boxables')
-        print(site)
-        print(backup_type)
+        self.sites = []
+        configs = os.listdir("etc/boxables")
+        today = date.today()
+        today.isoformat()
+        for key, config in configs:
+            if os.path.splitext(config)[1] == 'yaml':
+                if site == "*" or site == os.path.splitext(config)[0]:
+                    site_object = dict(
+                        tar_file=self.backup_folder + "/tar/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar",
+                        zip_file=self.backup_folder + "/0/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar.gz",
+                        site_name=os.path.splitext(config)[0],
+                        config="etc/boxables/" + config
+                    )
+                    self.sites.append(site_object)
 
-    def upload(self, method, file):
+        if site == "*":
+            if backup_type == "inc":
+                message = "Running an incremental backup on all sites."
+            else:
+                message = "Running a full backup on all sites."
+        else:
+            if backup_type == "inc":
+                message = "Running an incremental backup on " + site
+            else:
+                message = "Running a full backup on " + site
+        print(message + "\n")
+        self.logger.info(message)
+
+        self.shuffle_backups()
+        for site in self.sites:
+            self.create_archive(site)
+            self.upload(self.config["method"], site)
+
+    def shuffle_backups(self):
+        # 1. Delete backup/archive/3. Move 2->3, 1->2, working->1.
+        if not os.path.exists(self.backup_folder):
+            os.makedirs(self.backup_folder, exist_ok=True)
+        if os.path.exists(self.backup_folder + "/3"):
+            shutil.rmtree(self.backup_folder + "/3", True)
+        if os.path.exists(self.backup_folder + "/2/"):
+            os.rename(self.backup_folder + "/2", self.backup_folder + "/3")
+        if os.path.exists(self.backup_folder + "/1/"):
+            os.rename(self.backup_folder + "/1", self.backup_folder + "/2")
+        if os.path.exists(self.backup_folder + "/0/"):
+            os.rename(self.backup_folder + "/0", self.backup_folder + "/1")
+        if not os.path.exists(self.backup_folder + "/0/"):
+            os.makedirs(self.backup_folder + "/0/", exist_ok=True)
+
+    def create_archive(self, site):
+        if os.path.exists(self.backup_folder + "/sql"):
+            shutil.rmtree(self.backup_folder + "/sql", True)
+        os.makedirs(self.backup_folder + "/sql", exist_ok=True)
+        if os.path.exists(self.backup_folder + "/tar"):
+            shutil.rmtree(self.backup_folder + "/tar", True)
+        os.makedirs(self.backup_folder + "/tar", exist_ok=True)
+        tar_file = site["tar_file"]
+        zip_file = site["zip_file"]
+        config_file = site["config"]
+        tar = tarfile.open(tar_file, "w")
+        boxable_config = yaml.safe_load(open(config_file, 'r'))
+        root = boxable_config["home"]
+
+        if isinstance(boxable_config["files"], list):
+            for item in boxable_config["files"]:
+                if os.path.exists(root + item):
+                    tar.add(root + item, "files/" + item)
+        if isinstance(boxable_config["databases"], list):
+            for database in boxable_config["databases"]:
+                test = call(["/usr/bin/mysqldump", "--force", "--opt", "--skip-lock-tables", "--databases", database], shell=False)
+                if test == 0:
+                    sql = check_output(["/usr/bin/mysqldump", "--force", "--opt", "--skip-lock-tables", "--databases", database])
+                    with open(self.backup_folder + "/sql/" + database + ".sql", "w") as sql_file:
+                        sql_file.write(sql)
+            tar.add(self.backup_folder + "/sql/", "sql")
+        tar.close()
+
+        with open(tar_file, "rb") as buffer, gzip.open(zip_file, "wb") as gz:
+            gz.writelines(buffer)
+        gz.close()
+        os.remove(tar_file)
+
+    def upload(self, method, site):
+        zip_file = site["zip_file"]
         if method == 'google':
-            print("upload "+file)
+            uploader = self.config["process"]
+            destination = self.config["destination"]
+            create_folders = self.config["create_site_folders"]
+
+            site_name = site["site_name"]
+            if not create_folders:
+                real_destination = destination
+            else:
+                real_destination = destination + "/" + site_name
+
+            print("uploading " + zip_file + " using " + uploader + " to " + method)
