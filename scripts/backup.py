@@ -64,13 +64,13 @@ class BoxBack:
                 # Decided to include gdrive.
                 # Install google drive
                 if arch == '64bit' and system == 'windows':
-                    uploader = "gdrive-windows-x64.exe"
+                    uploader = "bin/gdrive-windows-x64.exe"
                 elif arch == '32bit' and system == 'windows':
-                    uploader = "gdrive-windows-386.exe"
+                    uploader = "bin/gdrive-windows-386.exe"
                 elif arch == '64bit' and system == 'linux':
-                    uploader = "gdrive-linux-x64"
+                    uploader = "bin/gdrive-linux-x64"
                 elif arch == '32bit' and system == 'linux':
-                    uploader = "gdrive-linux-386"
+                    uploader = "bin/gdrive-linux-386"
                 else:
                     logger.error("Boxable hasn't been developed for other systems at this time.")
                     sys.stdout.write("No supported systems\n")
@@ -244,7 +244,10 @@ class BoxBack:
                 raw_output = check_output([uploader, "list", "--name-width", "0", "-m", "300", "-q", "'" + destination + "' in parents"]).decode()
                 matches = re.findall(r"(Id|.*?) {3,}(Name|.*?) {3,}(Type|.*?) {3,}(Size|.*?) {3,}(Created|\d{4}.*)?", raw_output)
                 for [id, name, type, size, created] in matches:
-                    self.file_list[name] = id
+                    self.file_list[name] = dict(
+                        id=id,
+                        type=type
+                    )
 
     def upload(self, method, site):
         zip_file = site["zip_file"]
@@ -257,11 +260,13 @@ class BoxBack:
             if not create_folders:
                 real_destination = destination
             else:
-                if site_name in self.file_list.keys():
+                if site_name in self.file_list.keys() and self.file_list.get(site_name['type'] == 'dir'):
                     real_destination = self.file_list.get(site_name)
                 else:
                     response = check_output([uploader, "mkdir", site_name]).decode('utf-8')
                     real_destination = re.search("Directory (.*) created", response)[1]
+
+            # TODO read real_destination. if file exists that's being uploaded, use update, else upload.
 
             self.logger.info("Uploading " + zip_file + " using " + uploader + " to " + method + ":" + real_destination)
             call([uploader, "upload", "-p", real_destination, zip_file])
