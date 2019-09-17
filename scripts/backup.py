@@ -26,7 +26,7 @@ class BoxBack:
         [config_file, config_path] = BoxBack.getfile()
         self.config = yaml.safe_load(open(config_file, 'r'))
         self.logger = BoxLog()
-        self.read_destination(self.config["method"])
+        self.file_list = self.read_destination(self.config["method"], self.config["destination"])
 
     @staticmethod
     def getfile():
@@ -234,20 +234,21 @@ class BoxBack:
         gz.close()
         os.remove(tar_file)
 
-    def read_destination(self, method):
+    def read_destination(self, method, destination):
         if method == 'google':
             uploader = self.config["process"]
-            destination = self.config["destination"]
             # create_folders = self.config["create_site_folders"]
             test = call([uploader, "list", "--name-width", "0", "-m", "200", "-q", "'" + destination + "' in parents"])
             if test == 0:
                 raw_output = check_output([uploader, "list", "--name-width", "0", "-m", "300", "-q", "'" + destination + "' in parents"]).decode()
                 matches = re.findall(r"(Id|.*?) {3,}(Name|.*?) {3,}(Type|.*?) {3,}(Size|.*?) {3,}(Created|\d{4}.*)?", raw_output)
+                file_list = dict()
                 for [id, name, type, size, created] in matches:
-                    self.file_list[name] = dict(
+                    file_list[name] = dict(
                         id=id,
                         type=type
                     )
+                return file_list
 
     def upload(self, method, site):
         zip_file = site["zip_file"]
@@ -266,7 +267,12 @@ class BoxBack:
                     response = check_output([uploader, "mkdir", site_name]).decode('utf-8')
                     real_destination = re.search("Directory (.*) created", response)[1]
 
-            # TODO read real_destination. if file exists that's being uploaded, use update, else upload.
+            file_list = self.read_destination(method, real_destination)
+            for name, file in file_list:
+                if name == zip_file:
+                    self.logger.info("Updating " + zip_file + " using " + uploader + " to " + method + ":" + real_destination)
+                    call([uploader, "update", file["id"], zip_file])
+                    return
 
             self.logger.info("Uploading " + zip_file + " using " + uploader + " to " + method + ":" + real_destination)
             call([uploader, "upload", "-p", real_destination, zip_file])
