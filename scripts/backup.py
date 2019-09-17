@@ -18,6 +18,7 @@ from scripts import BoxLog, Prompts
 class BoxBack:
     logger: BoxLog
     backup_folder = "archive"
+    file_list = dict()
     sites = []
 
     def __init__(self):
@@ -25,6 +26,7 @@ class BoxBack:
         [config_file, config_path] = BoxBack.getfile()
         self.config = yaml.safe_load(open(config_file, 'r'))
         self.logger = BoxLog()
+        self.read_destination(self.config["method"])
 
     @staticmethod
     def getfile():
@@ -62,13 +64,13 @@ class BoxBack:
                 # Decided to include gdrive.
                 # Install google drive
                 if arch == '64bit' and system == 'windows':
-                    file = "gdrive-windows-x64.exe"
+                    uploader = "gdrive-windows-x64.exe"
                 elif arch == '32bit' and system == 'windows':
-                    file = "gdrive-windows-386.exe"
+                    uploader = "gdrive-windows-386.exe"
                 elif arch == '64bit' and system == 'linux':
-                    file = "gdrive-linux-x64"
+                    uploader = "gdrive-linux-x64"
                 elif arch == '32bit' and system == 'linux':
-                    file = "gdrive-linux-386"
+                    uploader = "gdrive-linux-386"
                 else:
                     logger.error("Boxable hasn't been developed for other systems at this time.")
                     sys.stdout.write("No supported systems\n")
@@ -76,13 +78,13 @@ class BoxBack:
 
                 data = dict(
                     method="google",
-                    process=file
+                    process=uploader
                 )
 
                 sys.stdout.write("The setup will now setup the authorization for google drive.\n")
 
                 while True:
-                    response = call(["gdrive", "list"], shell=False)
+                    response = call([uploader, "list"], shell=False)
                     if response == 0:
                         break
                     elif response == 1:
@@ -98,9 +100,9 @@ class BoxBack:
                     if result is not None:
                         destination_folder = result.group(2)
 
-                    test = call(["gdrive", "info", destination_folder])
+                    test = call([uploader, "info", destination_folder])
                     if test == 0:
-                        google_folder = check_output(["gdrive", "info", destination_folder])
+                        google_folder = check_output([uploader, "info", destination_folder])
                         google_yaml = yaml.safe_load(google_folder)
 
                         choice = Prompts.query_yes_no_cancel("Set the folder to " + google_yaml["Name"] + " [" + google_yaml['Id'] + "]")
@@ -151,7 +153,8 @@ class BoxBack:
         """
 
         self.sites = []
-        configs = os.listdir("etc/boxables")
+        [uneeded, config_path] = self.getfile()
+        configs = os.listdir(config_path)
         today = date.today()
         today.isoformat()
         for key, config in configs:
@@ -161,7 +164,7 @@ class BoxBack:
                         tar_file=self.backup_folder + "/tar/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar",
                         zip_file=self.backup_folder + "/0/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar.gz",
                         site_name=os.path.splitext(config)[0],
-                        config="etc/boxables/" + config
+                        config="etc/boxable/boxables/" + config
                     )
                     self.sites.append(site_object)
 
@@ -231,6 +234,18 @@ class BoxBack:
         gz.close()
         os.remove(tar_file)
 
+    def read_destination(self, method):
+        if method == 'google':
+            uploader = self.config["process"]
+            destination = self.config["destination"]
+            # create_folders = self.config["create_site_folders"]
+            test = call([uploader, "list", "--name-width", "0", "-m", "200", "-q", "'" + destination + "' in parents"])
+            if test == 0:
+                raw_output = check_output([uploader, "list", "--name-width", "0", "-m", "300", "-q", "'" + destination + "' in parents"]).decode()
+                matches = re.findall(r"(Id|.*?) {3,}(Name|.*?) {3,}(Type|.*?) {3,}(Size|.*?) {3,}(Created|\d{4}.*)?", raw_output)
+                for [id, name, type, size, created] in matches:
+                    self.file_list[name] = id
+
     def upload(self, method, site):
         zip_file = site["zip_file"]
         if method == 'google':
@@ -242,6 +257,11 @@ class BoxBack:
             if not create_folders:
                 real_destination = destination
             else:
-                real_destination = destination + "/" + site_name
+                if site_name in self.file_list.keys():
+                    real_destination = self.file_list.get(site_name)
+                else:
+                    response = check_output([uploader, "mkdir", site_name]).decode('utf-8')
+                    real_destination = re.search("Directory (.*) created", response)[1]
 
-            print("uploading " + zip_file + " using " + uploader + " to " + method)
+            self.logger.info("Uploading " + zip_file + " using " + uploader + " to " + method + ":" + real_destination)
+            call([uploader, "upload", "-p", real_destination, zip_file])

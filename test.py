@@ -3,7 +3,7 @@ import os
 import re
 from datetime import date
 
-from scripts import BoxBack
+from scripts import BoxBack, BoxLog
 
 destination_folder = "0B7nAS5KVLBl4VmlhRDRQRzlrMmM"
 
@@ -16,6 +16,9 @@ result = re.search(r"^(https://.*/folders/)?([^/]*?)$", string)
 if result is not None:
     print(result.group(2))
 
+# Test the setup of BoxLog
+BoxLog.setup()
+
 # # test 1
 # BoxBack.setup()
 
@@ -24,18 +27,21 @@ backup = BoxBack()
 # backup.shuffle_backups()
 
 # # Test 3
-# today = date.today()
-# config = "ikonquest.com.yaml"
-# site_object = dict(
-#     tar_file="archive/tar/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar",
-#     zip_file="archive/0/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar.gz",
-#     site=os.path.splitext(config)[0],
-#     config="etc/boxables/" + config
-# )
+today = date.today()
+config = "ikonquest.com.yaml"
+site_object = dict(
+    tar_file="archi ve/tar/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar",
+    zip_file="archive/0/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar.gz",
+    site_name=os.path.splitext(config)[0],
+    config="etc/boxables/" + config
+)
 # backup.create_archive(site_object)
 
+# Test 3.5
+print(backup.file_list)
+
 # # Test 4
-# backup.upload("google",site_object)
+# backup.upload("google", site_object)
 
 # # Test 5
 # backup.backup(os.path.splitext(config)[0], "inc")
