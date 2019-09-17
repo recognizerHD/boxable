@@ -244,6 +244,9 @@ class BoxBack:
                 matches = re.findall(r"(Id|.*?) {3,}(Name|.*?) {3,}(Type|.*?) {3,}(Size|.*?) {3,}(Created|\d{4}.*)?", raw_output)
                 file_list = dict()
                 for [id, name, type, size, created] in matches:
+                    if id == 'Id':
+                        continue
+
                     file_list[name] = dict(
                         id=id,
                         type=type
@@ -268,11 +271,12 @@ class BoxBack:
                     real_destination = re.search("Directory (.*) created", response)[1]
 
             file_list = self.read_destination(method, real_destination)
-            for name, file in file_list:
-                if name == zip_file:
-                    self.logger.info("Updating " + zip_file + " using " + uploader + " to " + method + ":" + real_destination)
-                    call([uploader, "update", file["id"], zip_file])
-                    return
+            if len(file_list):
+                for name, file in file_list:
+                    if name == zip_file:
+                        self.logger.info("Updating " + zip_file + " using " + uploader + " to " + method + ":" + real_destination)
+                        call([uploader, "update", file["id"], zip_file])
+                        return
 
             self.logger.info("Uploading " + zip_file + " using " + uploader + " to " + method + ":" + real_destination)
             call([uploader, "upload", "-p", real_destination, zip_file])

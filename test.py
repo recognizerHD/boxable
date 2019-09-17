@@ -33,7 +33,7 @@ site_object = dict(
     tar_file="archi ve/tar/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar",
     zip_file="archive/0/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar.gz",
     site_name=os.path.splitext(config)[0],
-    config="etc/boxables/" + config
+    config="/etc/boxable/boxables/" + config
 )
 # backup.create_archive(site_object)
 
