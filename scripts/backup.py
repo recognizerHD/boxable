@@ -164,7 +164,7 @@ class BoxBack:
                         tar_file=self.backup_folder + "/tar/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar",
                         zip_file=self.backup_folder + "/0/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar.gz",
                         site_name=os.path.splitext(config)[0],
-                        config="etc/boxable/boxables/" + config
+                        config=config_path + config
                     )
                     self.sites.append(site_object)
 
@@ -219,8 +219,8 @@ class BoxBack:
             for item in boxable_config["files"]:
                 if os.path.exists(root + item):
                     tar.add(root + item, "files/" + item)
-        if isinstance(boxable_config["databases"], list):
-            for database in boxable_config["databases"]:
+        if isinstance(boxable_config["mysql"], list):
+            for database in boxable_config["mysql"]:
                 test = call(["/usr/bin/mysqldump", "--force", "--opt", "--skip-lock-tables", "--databases", database], shell=False)
                 if test == 0:
                     sql = check_output(["/usr/bin/mysqldump", "--force", "--opt", "--skip-lock-tables", "--databases", database])
