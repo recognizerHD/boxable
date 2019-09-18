@@ -103,16 +103,6 @@ backup-files() {
     tar rvf $ARCHIVE -C $DIR_ROOT mysql/ 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
   fi
 
-  for file in ${FILES[*]}; do
-    DIR=$HOME$file
-    if [ $BACKUPTYPE == "full" ]; then
-      tar rvf $ARCHIVE -C $HOME $file --transform 's,^,files/,' 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
-    else
-      cd $HOME
-      find $file -mtime $MONTH_DATE -type f -print | tar rvf $ARCHIVE -T - --transform 's,^,files/,' 2>>$TEXT_ERRORS 1>>$TEXT_FULLTRANS
-    fi
-  done
-
   gzip $ARCHIVE
   ARCHIVE="$ARCHIVE.gz"
 
