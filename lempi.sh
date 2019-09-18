@@ -110,7 +110,7 @@ show-intro() {
     echo -e $cl_info"Next, various small packages used for backups and other background processes will be installed.";
     echo -e $cl_info"Then you will be asked to install the following packages:\e[0m ";
     echo -e $cl_info"       nginx-extras: "$cl_high"Latest";
-    echo -e $cl_info"            MariaDB: "$cl_high"10.1";
+    echo -e $cl_info"            MariaDB: "$cl_high"10.4";
     echo -e $cl_info"            PHP-FPM: "$cl_high"7.3";
     echo -e $cl_info"             Webmin: "$cl_high"Latest";
     echo -e $cl_info"Letsencrypt/Certbot: "$cl_high"Latest"$clear;
@@ -664,6 +664,7 @@ EOF
             echo -e "$console /usr/share/webmin/install-module.pl nginx-0.11.wbm" $clear
         else
             wget https://www.justindhoffman.com/sites/justindhoffman.com/files/nginx-0.11.wbm_.gz
+            gunzip nginx-0.11.wbm_.gz
             mv nginx-0.11.wbm_ nginx-0.11.wbm
             /usr/share/webmin/install-module.pl nginx-0.11.wbm
         fi
@@ -792,6 +793,8 @@ log_format main '[31m\$remote_addr[0m - \$remote_user [\$time_local] [35m\$st
 access_log /var/log/nginx/access.log main;
 EOF
 
+                    sed -i -e "s/^\([\t ]*\)access_log \/var\/log\/nginx\/access.log/\1# access_log \/var\/log\/nginx\/access.log/g" /etc/nginx/nginx.conf
+                    sed -i -e "s/^\([\t ]*\)error_log \/var\/log\/nginx\/error.log/\1# error_log \/var\/log\/nginx\/error.log/g" /etc/nginx/nginx.conf
                 fi
             fi
             NGINX_INSTALLED=$INSTALLED
