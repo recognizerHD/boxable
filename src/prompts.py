@@ -82,9 +82,9 @@ class Prompts:
             return False
 
         while True:
-            sys.stdout.write(question+"\n")
+            sys.stdout.write(question + "\n")
             for key, option in options.items():
-                sys.stdout.write('[' + key + ']: ' + option['name']+"\n")
+                sys.stdout.write('[' + key + ']: ' + option['name'] + "\n")
             choice = input().lower()
             if default is not None and choice == '':
                 return options[default]

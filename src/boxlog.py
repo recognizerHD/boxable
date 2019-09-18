@@ -2,11 +2,13 @@
 import logging
 import os
 import socket
-import yaml
-from pathlib import Path
 from logging import Logger
-from scripts.prompts import Prompts
 from logging.handlers import SysLogHandler
+from pathlib import Path
+
+import yaml
+
+from src.prompts import Prompts
 
 
 class BoxLog:
@@ -26,6 +28,7 @@ class BoxLog:
 
         self.logger = logging.getLogger()
         self.logger.addHandler(syslog)
+        self.logger.setLevel(logging.INFO)
 
         # self.logger.debug("Message debug")
         # self.logger.info("Message info")
@@ -71,7 +74,8 @@ class BoxLog:
 
             data = dict(
                 hostname=input_hostname,
-                port=input_port
+                port=input_port,
+                level=logging.INFO
             )
             with open(config_file, 'w') as config_out:
                 yaml.dump(data, config_out)

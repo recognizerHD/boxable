@@ -3,7 +3,7 @@ import os
 import re
 from datetime import date
 
-from scripts import BoxBack, BoxLog
+from src import BoxBack, BoxLog
 
 destination_folder = "0B7nAS5KVLBl4VmlhRDRQRzlrMmM"
 
@@ -30,7 +30,7 @@ backup = BoxBack()
 today = date.today()
 config = "ikonquest.com.yaml"
 site_object = dict(
-    tar_file="archi ve/tar/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar",
+    tar_file="archive/tar/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar",
     zip_file="archive/0/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar.gz",
     site_name=os.path.splitext(config)[0],
     config="/etc/boxable/boxables/" + config
@@ -38,13 +38,13 @@ site_object = dict(
 # backup.create_archive(site_object)
 
 # Test 3.5
-print(backup.file_list)
+#print(backup.file_list)
 
 # # Test 4
 # backup.upload("google", site_object)
 
 # # Test 5
-# backup.backup(os.path.splitext(config)[0], "inc")
+backup.backup(os.path.splitext(config)[0], "inc")
 
 # # Test 6
 # backup.backup(os.path.splitext(config)[0], "full")

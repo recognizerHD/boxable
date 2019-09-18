@@ -12,7 +12,7 @@ from subprocess import call, check_output
 
 import yaml
 
-from scripts import BoxLog, Prompts
+from src import BoxLog, Prompts
 
 
 class BoxBack:
@@ -152,39 +152,48 @@ class BoxBack:
         :return:
         """
 
-        self.sites = []
-        [uneeded, config_path] = self.getfile()
-        configs = os.listdir(config_path)
-        today = date.today()
-        today.isoformat()
-        for key, config in configs:
-            if os.path.splitext(config)[1] == 'yaml':
-                if site == "*" or site == os.path.splitext(config)[0]:
-                    site_object = dict(
-                        tar_file=self.backup_folder + "/tar/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar",
-                        zip_file=self.backup_folder + "/0/" + os.path.splitext(config)[0] + "-" + today.isoformat() + ".tar.gz",
-                        site_name=os.path.splitext(config)[0],
-                        config=config_path + config
-                    )
-                    self.sites.append(site_object)
+        try:
+            self.sites = []
+            [uneeded, config_path] = self.getfile()
+            configs = os.listdir(config_path)
+            today = date.today()
+            today.isoformat()
 
-        if site == "*":
-            if backup_type == "inc":
-                message = "Running an incremental backup on all sites."
+            if site == "*":
+                if backup_type == "inc":
+                    message = "Running an incremental backup on all sites."
+                else:
+                    message = "Running a full backup on all sites."
             else:
-                message = "Running a full backup on all sites."
-        else:
+                if backup_type == "inc":
+                    message = "Running an incremental backup on " + site
+                else:
+                    message = "Running a full backup on " + site
             if backup_type == "inc":
-                message = "Running an incremental backup on " + site
+                extra = "-inc"
             else:
-                message = "Running a full backup on " + site
-        print(message + "\n")
-        self.logger.info(message)
+                extra = ""
+            print(message + "\n")
+            self.logger.info(message)
 
-        self.shuffle_backups()
-        for site in self.sites:
-            self.create_archive(site)
-            self.upload(self.config["method"], site)
+            for config in configs:
+                if os.path.splitext(config)[1] == '.yaml' or os.path.splitext(config)[1] == '.yml':
+                    if site == "*" or site == os.path.splitext(config)[0]:
+                        site_object = dict(
+                            tar_file=self.backup_folder + "/tar/" + os.path.splitext(config)[0] + "-" + today.isoformat() + extra +".tar",
+                            zip_file=self.backup_folder + "/0/" + os.path.splitext(config)[0] + "-" + today.isoformat() + extra +".tar.gz",
+                            site_name=os.path.splitext(config)[0],
+                            config=config_path.as_posix() + "/" + config
+                        )
+                        self.sites.append(site_object)
+
+            self.shuffle_backups()
+            for site in self.sites:
+                self.create_archive(site)
+                self.upload(self.config["method"], site)
+        except Exception as e:
+            self.logger.error(e)
+            self.logger.error(e.with_traceback())
 
     def shuffle_backups(self):
         # 1. Delete backup/archive/3. Move 2->3, 1->2, working->1.
@@ -211,6 +220,9 @@ class BoxBack:
         tar_file = site["tar_file"]
         zip_file = site["zip_file"]
         config_file = site["config"]
+        if not os.path.exists(config_file):
+            self.logger.error("Config " + config_file + " doesn't exist.")
+            return
         tar = tarfile.open(tar_file, "w")
         boxable_config = yaml.safe_load(open(config_file, 'r'))
         root = boxable_config["home"]
@@ -264,16 +276,16 @@ class BoxBack:
             if not create_folders:
                 real_destination = destination
             else:
-                if site_name in self.file_list.keys() and self.file_list.get(site_name['type'] == 'dir'):
-                    real_destination = self.file_list.get(site_name)
+                if site_name in self.file_list.keys() and self.file_list.get(site_name)['type'] == 'dir':
+                    real_destination = self.file_list.get(site_name)["id"]
                 else:
-                    response = check_output([uploader, "mkdir", site_name]).decode('utf-8')
+                    response = check_output([uploader, "mkdir", "-p", destination, site_name]).decode('utf-8')
                     real_destination = re.search("Directory (.*) created", response)[1]
 
             file_list = self.read_destination(method, real_destination)
             if len(file_list):
-                for name, file in file_list:
-                    if name == zip_file:
+                for name, file in file_list.items():
+                    if name == os.path.basename(zip_file):
                         self.logger.info("Updating " + zip_file + " using " + uploader + " to " + method + ":" + real_destination)
                         call([uploader, "update", file["id"], zip_file])
                         return

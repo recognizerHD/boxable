@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import sys
 
-import scripts
+import src
 
-backup = scripts.BoxBack()
+backup = src.BoxBack()
 
 if sys.argv[1:]:
     sites = "*"
@@ -17,7 +17,3 @@ if sys.argv[1:]:
             sites = arg
 
     backup.backup(sites, backup_type)
-    # logger.error(sys.argv[1])
-# # logger.info(sys.argv[1:])
-# #    print(sys.argv[1])
-# print(sys.argv[1:])
