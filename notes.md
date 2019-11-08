@@ -10,3 +10,6 @@ Update any code to point the host to **localhost:/var/lib/mysql/mysql.sock** or 
 
 https://easyengine.io/tutorials/
 https://github.com/WordOps/WordOps
+
+Implement this:
+https://docs.python.org/3/library/unittest.html#module-unittest

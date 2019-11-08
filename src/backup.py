@@ -4,11 +4,13 @@ import os
 import platform
 import re
 import shutil
+import subprocess
 import sys
 import tarfile
-from datetime import date
+import traceback
+from datetime import date, datetime
 from pathlib import Path
-from subprocess import call, check_output
+from subprocess import call, check_output, run
 
 import yaml
 
@@ -180,8 +182,8 @@ class BoxBack:
                 if os.path.splitext(config)[1] == '.yaml' or os.path.splitext(config)[1] == '.yml':
                     if site == "*" or site == os.path.splitext(config)[0]:
                         site_object = dict(
-                            tar_file=self.backup_folder + "/tar/" + os.path.splitext(config)[0] + "-" + today.isoformat() + extra +".tar",
-                            zip_file=self.backup_folder + "/0/" + os.path.splitext(config)[0] + "-" + today.isoformat() + extra +".tar.gz",
+                            tar_file=self.backup_folder + "/tar/" + os.path.splitext(config)[0] + "-" + today.isoformat() + extra + ".tar",
+                            zip_file=self.backup_folder + "/0/" + os.path.splitext(config)[0] + "-" + today.isoformat() + extra + ".tar.gz",
                             site_name=os.path.splitext(config)[0],
                             config=config_path.as_posix() + "/" + config
                         )
@@ -189,11 +191,13 @@ class BoxBack:
 
             self.shuffle_backups()
             for site in self.sites:
-                self.create_archive(site)
+                self.create_archive(site, backup_type)
                 self.upload(self.config["method"], site)
         except Exception as e:
             self.logger.error(e)
-            self.logger.error(e.with_traceback())
+            self.logger.error(traceback.TracebackException.from_exception(e))
+        finally:
+            print("DONE")
 
     def shuffle_backups(self):
         # 1. Delete backup/archive/3. Move 2->3, 1->2, working->1.
@@ -210,7 +214,7 @@ class BoxBack:
         if not os.path.exists(self.backup_folder + "/0/"):
             os.makedirs(self.backup_folder + "/0/", exist_ok=True)
 
-    def create_archive(self, site):
+    def create_archive(self, site, backup_type):
         if os.path.exists(self.backup_folder + "/sql"):
             shutil.rmtree(self.backup_folder + "/sql", True)
         os.makedirs(self.backup_folder + "/sql", exist_ok=True)
@@ -227,17 +231,35 @@ class BoxBack:
         boxable_config = yaml.safe_load(open(config_file, 'r'))
         root = boxable_config["home"]
 
-        if isinstance(boxable_config["files"], list):
+        self.logger.info("Creating " + zip_file)
+
+        now = datetime.now()
+        first_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        if boxable_config.get("files") and isinstance(boxable_config["files"], list):
             for item in boxable_config["files"]:
                 if os.path.exists(root + item):
-                    tar.add(root + item, "files/" + item)
-        if isinstance(boxable_config["mysql"], list):
+                    if backup_type == 'inc':
+                        for folder, dirs, files in os.walk(root + item):
+                            for filename in files:
+                                path = os.path.join(folder, filename)
+                                sub_path = path[len(folder):]
+                                stats = os.stat(path)
+                                modified_time = datetime.fromtimestamp(stats.st_mtime)
+                                if modified_time > first_of_month:
+                                    tar.add(path, "files/" + sub_path)
+                    else:
+                        tar.add(root + item, "files/" + item)
+        if boxable_config.get("mysql") and isinstance(boxable_config["mysql"], list):
             for database in boxable_config["mysql"]:
-                test = call(["/usr/bin/mysqldump", "--force", "--opt", "--skip-lock-tables", "--databases", database], shell=False)
-                if test == 0:
-                    sql = check_output(["/usr/bin/mysqldump", "--force", "--opt", "--skip-lock-tables", "--databases", database])
-                    with open(self.backup_folder + "/sql/" + database + ".sql", "w") as sql_file:
-                        sql_file.write(sql)
+                # test = call(["/usr/bin/mysqldump", "--force", "--opt", "--skip-lock-tables", "--databases", database], shell=False)
+                sql_dump = run(["/usr/bin/mysqldump", "--force", "--opt", "--skip-lock-tables", "--databases", database], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                if sql_dump.returncode == 0:
+                    # sql = check_output(["/usr/bin/mysqldump", "--force", "--opt", "--skip-lock-tables", "--databases", database]).decode('utf-8')  # , 'ignore'
+
+                    with open(self.backup_folder + "/sql/" + database + ".sql", "w", encoding='utf-8') as sql_file:
+                        sql_file.write(sql_dump.stdout.decode('utf-8', 'ignore'))  # .encode('utf-8')
+                        # sql_file.write(sql) # .encode('utf-8'))
             tar.add(self.backup_folder + "/sql/", "sql")
         tar.close()
 
@@ -248,11 +270,16 @@ class BoxBack:
 
     def read_destination(self, method, destination):
         if method == 'google':
-            uploader = self.config["process"]
+            uploader_file = self.config["process"]
+            uploader = os.path.join(os.path.dirname(__file__), '..', uploader_file)
+
             # create_folders = self.config["create_site_folders"]
-            test = call([uploader, "list", "--name-width", "0", "-m", "200", "-q", "'" + destination + "' in parents"])
-            if test == 0:
-                raw_output = check_output([uploader, "list", "--name-width", "0", "-m", "300", "-q", "'" + destination + "' in parents"]).decode()
+            folder_list = run([uploader, "list", "--name-width", "0", "-m", "200", "-q", "'" + destination + "' in parents"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            # test = call([uploader, "list", "--name-width", "0", "-m", "200", "-q", "'" + destination + "' in parents"])
+            if folder_list.returncode == 0:
+                # raw_output = check_output([uploader, "list", "--name-width", "0", "-m", "300", "-q", "'" + destination + "' in parents"]).decode()
+                raw_output = folder_list.stdout.decode('utf-8')
                 matches = re.findall(r"(Id|.*?) {3,}(Name|.*?) {3,}(Type|.*?) {3,}(Size|.*?) {3,}(Created|\d{4}.*)?", raw_output)
                 file_list = dict()
                 for [id, name, type, size, created] in matches:
@@ -268,7 +295,8 @@ class BoxBack:
     def upload(self, method, site):
         zip_file = site["zip_file"]
         if method == 'google':
-            uploader = self.config["process"]
+            uploader_file = self.config["process"]
+            uploader = os.path.join(os.path.dirname(__file__), '..', uploader_file)
             destination = self.config["destination"]
             create_folders = self.config["create_site_folders"]
 
