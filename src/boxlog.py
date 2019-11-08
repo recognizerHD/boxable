@@ -12,23 +12,27 @@ from src.prompts import Prompts
 
 
 class BoxLog:
-    logger: Logger
+    logger = False
 
     def __init__(self):
         BoxLog.setup()
-        config_file = BoxLog.getfile()
+        if not BoxLog.logger:
+            config_file = BoxLog.getfile()
 
-        config = yaml.safe_load(open(config_file, 'r'))
-        syslog = SysLogHandler(address=(config['hostname'], config['port']))
-        syslog.addFilter(ContextFilter())
+            config = yaml.safe_load(open(config_file, 'r'))
+            syslog = SysLogHandler(address=(config['hostname'], config['port']))
+            syslog.addFilter(ContextFilter())
 
-        log_format = '%(asctime)s %(hostname)s Boxable: %(message)s'
-        formatter = logging.Formatter(log_format, datefmt='%b %d %H:%M:%S')
-        syslog.setFormatter(formatter)
+            log_format = '%(asctime)s %(hostname)s Boxable: %(message)s'
+            formatter = logging.Formatter(log_format, datefmt='%b %d %H:%M:%S')
+            syslog.setFormatter(formatter)
 
-        self.logger = logging.getLogger()
-        self.logger.addHandler(syslog)
-        self.logger.setLevel(logging.INFO)
+            self.logger = logging.getLogger()
+            self.logger.addHandler(syslog)
+            self.logger.setLevel(logging.INFO)
+            BoxLog.logger = self.logger
+        else:
+            self.logger = BoxLog.logger
 
         # self.logger.debug("Message debug")
         # self.logger.info("Message info")
